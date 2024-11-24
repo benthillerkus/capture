@@ -55,13 +55,13 @@ async fn main() -> Result<()> {
         }),
     );
 
+    // Start hoptspot *before* binding the address
+    let hotspot = HotspotActorHandle::new();
+    hotspot.start().await;
+
     let listener = tokio::net::TcpListener::bind(args.address).await?;
     info!("listening on http://{}", listener.local_addr()?);
     let server = axum::serve(listener, app);
-
-    let hotspot = HotspotActorHandle::new();
-
-    hotspot.start().await;
 
     tokio::select! {
         _ = shutdown => {
@@ -102,8 +102,8 @@ struct HotspotActor {
 }
 
 enum HotspotMessage {
-    Start,
-    Stop,
+    Start(tokio::sync::oneshot::Sender<()>),
+    Stop(tokio::sync::oneshot::Sender<()>),
 }
 
 impl HotspotActor {
@@ -113,16 +113,20 @@ impl HotspotActor {
 
     async fn handle_message(&mut self, message: HotspotMessage) {
         match message {
-            HotspotMessage::Start => {
+            HotspotMessage::Start(sender) => {
                 info!("starting hotspot");
                 Command::new("nmcli")
                     .arg("connection")
                     .arg("up")
                     .arg("Hotspot")
                     .spawn()
+                    .unwrap()
+                    .wait()
+                    .await
                     .unwrap();
+                let _ = sender.send(());
             }
-            HotspotMessage::Stop => {
+            HotspotMessage::Stop(sender) => {
                 info!("stopping hotspot");
                 Command::new("nmcli")
                     .arg("connection")
@@ -133,6 +137,7 @@ impl HotspotActor {
                     .wait()
                     .await
                     .unwrap();
+                let _ = sender.send(());
             }
         }
     }
@@ -158,11 +163,15 @@ impl HotspotActorHandle {
     }
 
     pub async fn start(&self) {
-        let _ = self.sender.send(HotspotMessage::Start).await;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let _ = self.sender.send(HotspotMessage::Start(sender)).await;
+        let _ = receiver.await;
     }
 
     pub async fn stop(&self) {
-        let _ = self.sender.send(HotspotMessage::Stop).await;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let _ = self.sender.send(HotspotMessage::Stop(sender)).await;
+        let _ = receiver.await;
     }
 }
 
