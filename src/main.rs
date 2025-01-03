@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
         )
         .route_service("/output.mp4", ServeFile::new("output.mp4"));
 
-    // c3.start_livefeed().await;
+    c3.start_livefeed().await;
 
     #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
     let mut hotspot_handle = None;
