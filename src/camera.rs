@@ -112,11 +112,17 @@ impl CameraActor {
                 }
                 #[cfg(not(target_os = "linux"))]
                 {
-                    let src = ElementFactory::make("videotestsrc").build().unwrap();
-                    let sink = ElementFactory::make("autovideosink").build().unwrap();
+                    let video = ElementFactory::make("videotestsrc").build().unwrap();
+                    let audio = ElementFactory::make("audiotestsrc").build().unwrap();
+                    let sink = ElementFactory::make("webrtcsink")
+                        .name("ws")
+                        .property_from_str("meta", "meta")
+                        .build()
+                        .unwrap();
 
-                    pipeline.add_many([&src, &sink]).unwrap();
-                    src.link(&sink).unwrap();
+                    pipeline.add_many([&video, &audio, &sink]).unwrap();
+                    video.link(&sink).unwrap();
+                    audio.link(&sink).unwrap();
 
                     pipeline.set_state(State::Playing).unwrap();
                 }

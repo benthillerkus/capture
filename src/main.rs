@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use camera::{CameraActorHandle, CameraState};
 use clap::Parser;
-#[cfg(all(feature = "hotspot", not(target_os = "macos")))]
-use hotspot::HotspotActorHandle;
+
 use tokio::{fs, process::Command, sync::Mutex};
 
 use axum::{
@@ -16,7 +15,12 @@ use tower_http::services::ServeFile;
 use tracing::{info, warn};
 
 mod camera;
+
+#[cfg(all(feature = "hotspot", not(target_os = "macos")))]
 mod hotspot;
+
+#[cfg(feature = "signalling")]
+mod signalling;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -24,6 +28,21 @@ struct Args {
     /// The network address and port to listen to.
     #[clap(short = 'a', long = "address", default_value = "0.0.0.0:8080")]
     address: std::net::SocketAddr,
+
+    #[cfg(feature = "signalling")]
+    #[clap(long)]
+    enable_signalling: bool,
+
+    #[cfg(feature = "signalling")]
+    #[clap(long, default_value = "0.0.0.0:8443")]
+    signalling_address: std::net::SocketAddr,
+
+    /// TLS certificate to use
+    #[clap(short, long)]
+    cert: Option<String>,
+    /// password to TLS certificate
+    #[clap(long)]
+    cert_password: Option<String>,
 
     #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
     #[clap(long)]
@@ -75,9 +94,26 @@ async fn main() -> Result<()> {
     #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
     {
         if args.enable_hotspot {
-            let hotspot = HotspotActorHandle::new(&args.ssid, &args.password);
+            let hotspot = hotspot::HotspotActorHandle::new(&args.ssid, &args.password);
             hotspot.start().await;
             hotspot_handle = Some(hotspot);
+        }
+    }
+
+    #[cfg(feature = "signalling")]
+    {
+        if args.enable_signalling {
+            tokio::spawn(async move {
+                if let Err(err) = signalling::run_signalling_server(
+                    &args.signalling_address,
+                    &args.cert,
+                    &args.cert_password,
+                )
+                .await
+                {
+                    warn!("signalling server error: {:?}", err);
+                }
+            });
         }
     }
 

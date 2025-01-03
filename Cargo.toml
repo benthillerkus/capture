@@ -18,8 +18,11 @@ windows = { version = "0.56.0", optional = true, features = [
   "Networking_Connectivity",
 ] }
 gstreamer = "0.23.4"
-
+gst-plugin-webrtc = "0.13.4"
+gst-plugin-webrtc-signalling = { version = "0.13.3", optional = true }
+tokio-native-tls = {version = "0.3.1", optional = true }
 
 [features]
-default = ["hotspot"]
+default = ["hotspot", "signalling"]
 hotspot = ["dep:windows"]
+signalling = ["dep:gst-plugin-webrtc-signalling", "dep:tokio-native-tls"]
