@@ -81,7 +81,7 @@ impl HotspotActorHandle {
             tokio::spawn(HotspotActor::run(actor));
         }
         // Unfortunately, the `NetworkOperatorTetheringManager` API on Windows is not
-        // thread-safe on Windows, so we have to run it in a way
+        // thread-safe, so we have to run it in a way
         // where tokio will not try to move it between threads.
         #[cfg(target_os = "windows")]
         {
