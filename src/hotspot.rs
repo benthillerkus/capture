@@ -76,28 +76,38 @@ impl HotspotActorHandle {
             password: password.to_string(),
         };
 
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        std::thread::spawn(move || {
-            // Construct a local task set that can run `!Send` futures.
-            let local = task::LocalSet::new();
-
-            // Run the local task set.
-            let future = local.run_until(async move {
-                // `spawn_local` ensures that the future is spawned on the local
-                // task set.
-                task::spawn_local(
-                    HotspotActor::run(actor), // ...
-                )
-                .await
+        #[cfg(not(target_os = "windows"))]
+        {
+            tokio::spawn(HotspotActor::run(actor));
+        }
+        // Unfortunately, the `NetworkOperatorTetheringManager` API on Windows is not
+        // thread-safe on Windows, so we have to run it in a way
+        // where tokio will not try to move it between threads.
+        #[cfg(target_os = "windows")]
+        {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
                 .unwrap();
-            });
 
-            rt.block_on(future);
-        });
+            std::thread::spawn(move || {
+                // Construct a local task set that can run `!Send` futures.
+                let local = task::LocalSet::new();
+
+                // Run the local task set.
+                let future = local.run_until(async move {
+                    // `spawn_local` ensures that the future is spawned on the local
+                    // task set.
+                    task::spawn_local(
+                        HotspotActor::run(actor), // ...
+                    )
+                    .await
+                    .unwrap();
+                });
+
+                rt.block_on(future);
+            });
+        }
 
         Self { sender }
     }
