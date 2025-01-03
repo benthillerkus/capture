@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
+use camera::{CameraActorHandle, CameraState};
 use clap::Parser;
-use tokio::{process::Command, sync::Mutex};
+#[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+use hotspot::HotspotActorHandle;
+use tokio::{fs, process::Command, sync::Mutex};
 
 use axum::{
     response::Html,
@@ -9,20 +12,30 @@ use axum::{
     Extension, Router,
 };
 use color_eyre::eyre::Result;
+use tower_http::services::ServeFile;
 use tracing::{info, warn};
+
+mod camera;
+mod hotspot;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
     /// The network address and port to listen to.
-    #[clap(short = 'a', long = "address", default_value = "127.0.0.1:80")]
+    #[clap(short = 'a', long = "address", default_value = "0.0.0.0:8080")]
     address: std::net::SocketAddr,
-}
 
-enum AppState {
-    Idle,
-    Capturing,
-    Processing,
+    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+    #[clap(long)]
+    enable_hotspot: bool,
+
+    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+    #[clap(long, default_value = "hey monte dein aquarium brennt")]
+    ssid: String,
+
+    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+    #[clap(long, default_value = "jajajajaja")]
+    password: String,
 }
 
 #[tokio::main]
@@ -34,30 +47,39 @@ async fn main() -> Result<()> {
 
     let shutdown = tokio::signal::ctrl_c();
 
-    let app_state = Arc::new(Mutex::new(AppState::Idle));
+    let camera = CameraActorHandle::new();
+    let c1 = camera.clone();
+    let c2 = camera.clone();
+    let c3 = camera.clone();
 
-    let app = Router::new().route(
-        "/",
-        get({
-            let state = app_state.clone();
-            move || async { Html(render_page(state).await) }
-        })
-        .post({
-            let state = app_state.clone();
-            move || async {
-                info!("received capture");
-                {
-                    let mut state = state.lock().await;
-                    *state = AppState::Capturing;
+    let app = Router::new()
+        .route(
+            "/",
+            get(|| async { Html(render_page(c1).await) }).post({
+                move || async {
+                    info!("received capture");
+                    match c2.get_state().await {
+                        CameraState::Livefeed | CameraState::Idle => c2.start_capture().await,
+                        CameraState::Capture => c2.start_livefeed().await,
+                    }
+                    Html(render_page(c2).await)
                 }
-                Html(render_page(state).await)
-            }
-        }),
-    );
+            }),
+        )
+        .route_service("/output.mp4", ServeFile::new("output.mp4"));
 
-    // Start hoptspot *before* binding the address
-    let hotspot = HotspotActorHandle::new();
-    hotspot.start().await;
+    // c3.start_livefeed().await;
+
+    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+    let mut hotspot_handle = None;
+    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+    {
+        if args.enable_hotspot {
+            let hotspot = HotspotActorHandle::new(&args.ssid, &args.password);
+            hotspot.start().await;
+            hotspot_handle = Some(hotspot);
+        }
+    }
 
     let listener = tokio::net::TcpListener::bind(args.address).await?;
     info!("listening on http://{}", listener.local_addr()?);
@@ -66,6 +88,7 @@ async fn main() -> Result<()> {
     tokio::select! {
         _ = shutdown => {
             info!("received shutdown signal");
+            camera.shutdown().await;
         },
         res = server => {
             if let Err(err) = res {
@@ -75,108 +98,36 @@ async fn main() -> Result<()> {
         }
     }
 
-    hotspot.stop().await;
+    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+    {
+        if let Some(h) = hotspot_handle {
+            h.stop().await;
+        }
+    }
 
     info!("shutdown complete");
 
     Ok(())
 }
 
-async fn render_page(state: Arc<Mutex<AppState>>) -> String {
-    let state = state.lock().await;
-
+async fn render_page(camera: CameraActorHandle) -> String {
+    let state = camera.get_state().await;
+    let has_video_file = std::path::Path::new("output.mp4").exists();
     include_str!("../index.html")
         .replace(
+            "{video}",
+            if has_video_file {
+                r#"<video controls width="200px" src="output.mp4" type="video/mp4"></video>"#
+            } else {
+                ""
+            },
+        )
+        .replace(
             "{app_state}",
-            match *state {
-                AppState::Idle => "Capture",
-                AppState::Capturing => "Stop Capturing",
-                AppState::Processing => "Processing...",
+            match state {
+                CameraState::Idle | CameraState::Livefeed => "Capture",
+                CameraState::Capture => "Stop Capturing",
             },
         )
         .to_string()
-}
-
-struct HotspotActor {
-    receiver: tokio::sync::mpsc::Receiver<HotspotMessage>,
-}
-
-enum HotspotMessage {
-    Start(tokio::sync::oneshot::Sender<()>),
-    Stop(tokio::sync::oneshot::Sender<()>),
-}
-
-impl HotspotActor {
-    fn new(receiver: tokio::sync::mpsc::Receiver<HotspotMessage>) -> Self {
-        Self { receiver }
-    }
-
-    async fn handle_message(&mut self, message: HotspotMessage) {
-        match message {
-            HotspotMessage::Start(sender) => {
-                info!("starting hotspot");
-                Command::new("nmcli")
-                    .arg("connection")
-                    .arg("up")
-                    .arg("Hotspot")
-                    .spawn()
-                    .unwrap()
-                    .wait()
-                    .await
-                    .unwrap();
-                let _ = sender.send(());
-            }
-            HotspotMessage::Stop(sender) => {
-                info!("stopping hotspot");
-                Command::new("nmcli")
-                    .arg("connection")
-                    .arg("down")
-                    .arg("Hotspot")
-                    .spawn()
-                    .unwrap()
-                    .wait()
-                    .await
-                    .unwrap();
-                let _ = sender.send(());
-            }
-        }
-    }
-}
-
-async fn run_hotspot_actor(mut actor: HotspotActor) {
-    while let Some(message) = actor.receiver.recv().await {
-        actor.handle_message(message).await;
-    }
-}
-
-#[derive(Clone)]
-pub struct HotspotActorHandle {
-    sender: tokio::sync::mpsc::Sender<HotspotMessage>,
-}
-
-impl HotspotActorHandle {
-    pub fn new() -> Self {
-        let (sender, receiver) = tokio::sync::mpsc::channel(8);
-        let actor = HotspotActor::new(receiver);
-        tokio::spawn(run_hotspot_actor(actor));
-        Self { sender }
-    }
-
-    pub async fn start(&self) {
-        let (sender, receiver) = tokio::sync::oneshot::channel();
-        let _ = self.sender.send(HotspotMessage::Start(sender)).await;
-        let _ = receiver.await;
-    }
-
-    pub async fn stop(&self) {
-        let (sender, receiver) = tokio::sync::oneshot::channel();
-        let _ = self.sender.send(HotspotMessage::Stop(sender)).await;
-        let _ = receiver.await;
-    }
-}
-
-impl Default for HotspotActorHandle {
-    fn default() -> Self {
-        Self::new()
-    }
 }
