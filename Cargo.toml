@@ -1,0 +1,30 @@
+[package]
+name = "capture"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = "0.8.1"
+clap = { version = "4.5.23", features = ["derive"] }
+color-eyre = "0.6.3"
+tokio = { version = "1.42.0", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["fs"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+windows = { version = "0.56.0", optional = true, features = [
+  "Networking_NetworkOperators",
+  "Networking_Connectivity",
+] }
+gstreamer = "0.23.4"
+gst-plugin-webrtc = "0.13.4"
+gst-plugin-webrtc-signalling = { version = "0.13.3", optional = true }
+tokio-native-tls = {version = "0.3.1", optional = true }
+time = { version = "0.3.37", features = ["formatting"] }
+regex = { version = "1.11.1", features = ["use_std"] }
+
+[features]
+default = ["hotspot", "signalling"]
+hotspot = ["dep:windows"]
+signalling = ["dep:gst-plugin-webrtc-signalling", "dep:tokio-native-tls"]
