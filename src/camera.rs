@@ -1,6 +1,12 @@
+use std::str::FromStr;
+
 use gstreamer::prelude::*;
 use gstreamer::{ElementFactory, Pipeline, State};
+use time::{format_description, OffsetDateTime};
 use tokio::{process, sync::mpsc};
+use tracing::{error, info};
+use tracing_subscriber::fmt::time::SystemTime;
+use windows::Foundation::DateTime;
 
 struct CameraActor {
     receiver: mpsc::Receiver<CameraActorMessage>,
@@ -48,24 +54,55 @@ impl CameraActor {
                 }
 
                 let pipeline = Pipeline::new();
-                let src = ElementFactory::make("nvarguscamerasrc").build().unwrap();
-                let conv = ElementFactory::make("nvvidconv").build().unwrap();
-                let enc = ElementFactory::make("x264enc").build().unwrap();
-                let parse = ElementFactory::make("h264parse").build().unwrap();
-                let mux = ElementFactory::make("qtmux").build().unwrap();
-                let sink = ElementFactory::make("filesink").build().unwrap();
+                
+                let left_src = ElementFactory::make("nvarguscamerasrc")
+                    .name("left_src")
+                    .property_from_str("sensor_id", "0")
+                    .build()
+                    .unwrap();
+                
+                let right_src = ElementFactory::make("nvarguscamerasrc")
+                    .name("right_src")
+                    .property_from_str("sensor_id", "1")
+                    .build()
+                    .unwrap();
+
+                let left_enc = ElementFactory::make("nvjpegenc").property_from_str("quality", "95").build().unwrap();
+                let right_enc = ElementFactory::make("nvjpegenc").property_from_str("quality", "95").build().unwrap();
+                
+                let caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1280,height=(int)720,format=(string)NV12,framerate=(fraction)30/1").unwrap();
+                
+                let left_queue = ElementFactory::make("queue").build().unwrap();
+                let right_queue = ElementFactory::make("queue").build().unwrap();
+                
+                let left_mux = ElementFactory::make("matroskamux").build().unwrap();
+                let right_mux = ElementFactory::make("matroskamux").build().unwrap();
+                
+                
+                let left_sink = ElementFactory::make("filesink").build().unwrap();
+                let right_sink = ElementFactory::make("filesink").build().unwrap();
 
                 pipeline
-                    .add_many([&src, &conv, &enc, &parse, &mux, &sink])
+                    .add_many([&left_src, &left_enc, &left_queue, &right_src, &right_enc, &right_queue, &left_mux, &right_mux, &left_sink, &right_sink])
                     .unwrap();
-                src.link(&conv).unwrap();
-                conv.link(&enc).unwrap();
-                enc.link(&parse).unwrap();
-                parse.link(&mux).unwrap();
-                mux.link(&sink).unwrap();
-
-                sink.set_property("location", "output.mp4");
-
+                
+                left_src.link_filtered(&left_enc, &caps).unwrap();
+                right_src.link_filtered(&right_enc, &caps).unwrap();
+                
+                right_enc.link(&right_queue).unwrap();
+                left_enc.link(&left_queue).unwrap();
+                right_queue.link(&right_mux).unwrap();
+                left_queue.link(&left_mux).unwrap();
+                
+                left_mux.link(&left_sink).unwrap();
+                right_mux.link(&right_sink).unwrap();
+                
+                let format = format_description::parse("[year]-[month]-[day] [hour]-[minute]-[second]").unwrap();
+                let now = OffsetDateTime::now_utc().format(&format).unwrap();
+                
+                left_sink.set_property("location", format!("{now} left.mkv"));
+                right_sink.set_property("location", format!("{now} right.mkv"));
+                
                 pipeline.set_state(State::Playing).unwrap();
 
                 self.current_process = Some(pipeline);
@@ -84,30 +121,62 @@ impl CameraActor {
 
                 #[cfg(target_os = "linux")]
                 {
-                    let src_left = ElementFactory::make("nvarguscamerasrc")
-                        .name("left")
+                    let left_src = ElementFactory::make("nvarguscamerasrc")
+                        .name("left_src")
+                        .property_from_str("sensor_id", "0")
                         .build()
                         .unwrap();
-                    let src_right = ElementFactory::make("nvarguscamerasrc")
-                        .name("right")
+                    
+                    let right_src = ElementFactory::make("nvarguscamerasrc")
+                        .name("right_src")
+                        .property_from_str("sensor_id", "1")
                         .build()
                         .unwrap();
+
+                    let caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1280,height=(int)720,format=(string)NV12,framerate=(fraction)60/1").unwrap();
+                    let mix_caps = gstreamer::Caps::from_str("video/x-raw(memory:GLMemory),multiview-mode=top-bottom").unwrap();
+                    //let mix_caps = gstreamer::Caps::from_str("video/x-raw(memory:GLMemory),downmix-mode=0").unwrap();
+
+                    
                     let mix = ElementFactory::make("glstereomix")
                         .name("mix")
                         .build()
                         .unwrap();
-                    let queue = ElementFactory::make("queue").build().unwrap();
-                    let sink = ElementFactory::make("glimagesink").build().unwrap();
-                    sink.set_property("output-multiview-downmix-mode", 1);
+                    
+                    let left_conv = ElementFactory::make("nvvidconv").property_from_str("flip-method", "2").build().unwrap();
+                    let right_conv = ElementFactory::make("nvvidconv").property_from_str("flip-method", "2").build().unwrap();
+                    
+                    let left_glupload = ElementFactory::make("glupload").build().unwrap();
+                    let right_glupload = ElementFactory::make("glupload").build().unwrap();
+                    
+                    let glviewconvert = ElementFactory::make("glviewconvert").property_from_str("output-mode-override", "mono").property_from_str("downmix-mode", "1").build().unwrap();
+                    
+                    let queue = ElementFactory::make("queue").name("name").build().unwrap();
+                    let gldownload = ElementFactory::make("gldownload").name("gldownload").build().unwrap();
+                    let sink = ElementFactory::make("webrtcsink").name("sink")
+                        .property_from_str("meta", "meta")
+                        .property_from_str("run-signalling-server", "false")
+                        .property_from_str("run-web-server", "false").build().unwrap();
 
                     pipeline
-                        .add_many([&src_left, &src_right, &mix, &queue, &sink])
+                        .add_many([&left_src, &left_conv, &left_glupload, &right_src, &right_conv, &right_glupload, &mix, &queue, &glviewconvert, &gldownload, &sink])
                         .unwrap();
-                    src_left.link(&mix).unwrap();
-                    src_right.link(&mix).unwrap();
-                    mix.link(&queue).unwrap();
-                    queue.link(&sink).unwrap();
+                    
+                    left_src.link_filtered(&left_conv, &caps).unwrap();
 
+                    left_conv.link(&left_glupload).unwrap();
+                    left_glupload.link(&mix).unwrap();
+                    
+                    right_src.link_filtered(&right_conv, &caps).unwrap();
+
+                    right_conv.link(&right_glupload).unwrap();
+                    right_glupload.link(&mix).unwrap();
+                    
+                    mix.link_filtered(&glviewconvert, &mix_caps).unwrap();
+                    glviewconvert.link(&queue).unwrap();
+                    queue.link(&gldownload).unwrap();
+                    gldownload.link(&sink).unwrap();
+                    
                     pipeline.set_state(State::Playing).unwrap();
                 }
                 #[cfg(not(target_os = "linux"))]
@@ -133,6 +202,7 @@ impl CameraActor {
             CameraActorMessage::Shutdown() => {
                 if let Some(pipeline) = &mut self.current_process {
                     pipeline.set_state(State::Null).unwrap();
+                    self.current_process = None;
                 }
                 self.state = CameraState::Idle;
             }

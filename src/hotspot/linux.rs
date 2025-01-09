@@ -1,7 +1,8 @@
-use super::api::Hotspot;
+use super::Hotspot;
 use color_eyre::eyre::Result;
 use tokio::process::Command;
-
+use regex::Regex;
+use tracing::info;
 
 pub(crate) struct HotspotLinux<'a> {
     pub name: &'a str,
@@ -22,10 +23,13 @@ impl<'a> HotspotLinux<'a> {
             return Ok(());
         }
         let output_str = String::from_utf8_lossy(&output.stdout);
-        let ssid_match = output_str.contains(&format!("802-11-wireless.ssid:{}", self.ssid));
-        let password_match =
-            output_str.contains(&format!("802-11-wireless-security.psk:{}", self.password));
+        let ssid_regex = Regex::new(&format!(r"802-11-wireless\.ssid:\s*{}", self.ssid)).unwrap();
+        let password_regex = Regex::new(&format!(r"802-11-wireless-security\.psk:\s*{}", self.password)).unwrap();
+        let ssid_match = ssid_regex.is_match(&output_str);
+        let password_match = password_regex.is_match(&output_str);
+        
         if !ssid_match || !password_match {
+            info!("Password or SSID don't match. Recreating AP.");
             self.delete_hotspot().await?;
             return self.create_hotspot().await;
         }
@@ -39,13 +43,24 @@ impl<'a> HotspotLinux<'a> {
             .arg("wifi")
             .arg("hotspot")
             .arg("ifname")
-            .arg("wlan0")
+            .arg("wlP1p1s0")
             .arg("con-name")
             .arg(self.name)
             .arg("ssid")
             .arg(self.ssid)
             .arg("password")
             .arg(self.password)
+            .spawn()?
+            .wait()
+            .await?;
+        Ok(())
+    }
+    
+    async fn show_password(&self) -> Result<()> {
+        Command::new("nmcli")
+            .arg("dev")
+            .arg("wifi")
+            .arg("show-password")
             .spawn()?
             .wait()
             .await?;
@@ -66,6 +81,8 @@ impl<'a> HotspotLinux<'a> {
 
 impl<'a> Hotspot for HotspotLinux<'a> {
     async fn start(&self) -> color_eyre::eyre::Result<()> {
+        self.ensure_hotspot_exists().await?;
+        
         Command::new("nmcli")
             .arg("connection")
             .arg("up")
@@ -75,6 +92,7 @@ impl<'a> Hotspot for HotspotLinux<'a> {
             .wait()
             .await?;
 
+        self.show_password().await?;
         Ok(())
     }
 

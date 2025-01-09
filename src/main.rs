@@ -89,17 +89,6 @@ async fn main() -> Result<()> {
 
     c3.start_livefeed().await;
 
-    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
-    let mut hotspot_handle = None;
-    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
-    {
-        if args.enable_hotspot {
-            let hotspot = hotspot::HotspotActorHandle::new(&args.ssid, &args.password);
-            hotspot.start().await;
-            hotspot_handle = Some(hotspot);
-        }
-    }
-
     #[cfg(feature = "signalling")]
     {
         if args.enable_signalling {
@@ -114,6 +103,17 @@ async fn main() -> Result<()> {
                     warn!("signalling server error: {:?}", err);
                 }
             });
+        }
+    }
+
+    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+    let mut hotspot_handle = None;
+    #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
+    {
+        if args.enable_hotspot {
+            let hotspot = hotspot::HotspotActorHandle::new(&args.ssid, &args.password);
+            hotspot.start().await;
+            hotspot_handle = Some(hotspot);
         }
     }
 
