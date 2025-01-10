@@ -9,7 +9,7 @@ use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
 use tokio::{fs, task};
 use tokio_native_tls::native_tls;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -39,11 +39,11 @@ pub(crate) async fn run_signalling_server(
         None => None,
     };
 
-    info!("Listening on: {}", addr);
+    debug!("Listening on: {}", addr);
 
     while let Ok((stream, address)) = listener.accept().await {
         let mut server_clone = server.clone();
-        info!("Accepting connection from {}", address);
+        debug!("Accepting connection from {}", address);
 
         if let Some(acceptor) = acceptor.clone() {
             tokio::spawn(async move {

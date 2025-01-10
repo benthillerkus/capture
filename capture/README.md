@@ -1,0 +1,1 @@
+Video files contain JPEG image sequences ("motion jpeg"). You can reencode them with Handbrake or use ffmpeg to extract the individual frames.

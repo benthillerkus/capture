@@ -6,8 +6,9 @@
   let src = $state(null);
   let session = $state(null);
 
-  	/** @type {HTMLVideoElement} */
-  let video;
+  /** @type {HTMLVideoElement} */
+  let video = $state(null);
+  let interacted = $state(false);
 
   onMount(() => {
     const signalingProtocol = window.location.protocol.startsWith("https")
@@ -35,10 +36,12 @@
         session.addEventListener("streamsChanged", () => {
           if (session.streams.length > 0) {
             video.srcObject = session.streams[0];
-            // video.play().catch(console.warn);
+            if (interacted) {
+              video.play().catch(console.warn);
+            }
           }
-        })
-        session.connect()
+        });
+        session.connect();
       },
       producerRemoved: (producer) => {
         if (session) {
@@ -58,7 +61,16 @@
 
 <!-- svelte-ignore a11y_media_has_caption -->
 {#if api}
-  <video controls bind:this={video}> </video>
+  <video controls bind:this={video} onclick={(_) => (interacted = true)}>
+  </video>
 {:else}
   <p>Waiting for API to initialize...</p>
 {/if}
+
+<style>
+  video {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+  }
+</style>

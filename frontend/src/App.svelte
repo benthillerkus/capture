@@ -1,9 +1,9 @@
 <script>
   import svelteLogo from "./assets/svelte.svg";
   import viteLogo from "/vite.svg";
-  import Counter from "./lib/Counter.svelte";
   import Stream from "./lib/Stream.svelte";
     import Controls from "./lib/Controls.svelte";
+    import Record from "./lib/Record.svelte";
 </script>
 
 <main>
@@ -16,10 +16,6 @@
     </a>
   </div>
   <h1>Vite + Svelte</h1>
-
-  <div class="card">
-    <Counter />
-  </div>
 
   <div class="card">
     <Stream></Stream>
@@ -38,6 +34,8 @@
   </p>
 
   <p class="read-the-docs">Click on the Vite and Svelte logos to learn more</p>
+
+  <Record></Record>
 </main>
 
 <style>

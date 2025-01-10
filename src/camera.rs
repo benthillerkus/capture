@@ -2,8 +2,10 @@ use std::str::FromStr;
 
 use gstreamer::{prelude::*, Element};
 use gstreamer::{ElementFactory, Pipeline, State};
+use serde::Serialize;
 use time::{format_description, OffsetDateTime};
 use tokio::sync::mpsc;
+use tracing::info;
 
 struct CameraActor {
     receiver: mpsc::Receiver<CameraActorMessage>,
@@ -20,7 +22,7 @@ enum Controls {
     },
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize)]
 pub enum CameraState {
     Idle,
     Livefeed,
@@ -57,6 +59,8 @@ impl CameraActor {
                     return;
                 }
 
+                info!("starting capture");
+
                 if let Some(previous) = self.pipeline.take() {
                     previous.set_state(State::Null).unwrap();
                 }
@@ -64,28 +68,50 @@ impl CameraActor {
 
                 let pipeline = Pipeline::new();
 
-                let left_src = ElementFactory::make("nvarguscamerasrc")
-                    .name("left_src")
-                    .property_from_str("sensor_id", "0")
-                    .build()
-                    .unwrap();
+                let left_src: Element;
+                let right_src: Element;
+                let caps: gstreamer::Caps;
+                let left_enc: Element;
+                let right_enc: Element;
 
-                let right_src = ElementFactory::make("nvarguscamerasrc")
-                    .name("right_src")
-                    .property_from_str("sensor_id", "1")
-                    .build()
-                    .unwrap();
+                #[cfg(target_os = "linux")]
+                {
+                    let left_src = ElementFactory::make("nvarguscamerasrc")
+                        .name("left_src")
+                        .property_from_str("sensor_id", "0")
+                        .build()
+                        .unwrap();
 
-                let left_enc = ElementFactory::make("nvjpegenc")
-                    .property_from_str("quality", "95")
-                    .build()
-                    .unwrap();
-                let right_enc = ElementFactory::make("nvjpegenc")
-                    .property_from_str("quality", "95")
-                    .build()
-                    .unwrap();
+                    let right_src = ElementFactory::make("nvarguscamerasrc")
+                        .name("right_src")
+                        .property_from_str("sensor_id", "1")
+                        .build()
+                        .unwrap();
 
-                let caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1280,height=(int)720,format=(string)NV12,framerate=(fraction)30/1").unwrap();
+                    let caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1280,height=(int)720,format=(string)NV12,framerate=(fraction)30/1").unwrap();
+
+                    let left_enc = ElementFactory::make("nvjpegenc")
+                        .property_from_str("quality", "95")
+                        .build()
+                        .unwrap();
+                    let right_enc = ElementFactory::make("nvjpegenc")
+                        .property_from_str("quality", "95")
+                        .build()
+                        .unwrap();
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    left_src = ElementFactory::make("videotestsrc").build().unwrap();
+                    right_src = ElementFactory::make("videotestsrc").build().unwrap();
+                    caps = gstreamer::Caps::builder("video/x-raw")
+                        .field("width", 1280)
+                        .field("height", 720)
+                        .field("format", "NV12")
+                        .field("framerate", gstreamer::Fraction::new(30, 1))
+                        .build();
+                    left_enc = ElementFactory::make("jpegenc").build().unwrap();
+                    right_enc = ElementFactory::make("jpegenc").build().unwrap();
+                }
 
                 let left_queue = ElementFactory::make("queue").build().unwrap();
                 let right_queue = ElementFactory::make("queue").build().unwrap();
@@ -127,18 +153,22 @@ impl CameraActor {
                         .unwrap();
                 let now = OffsetDateTime::now_utc().format(&format).unwrap();
 
-                left_sink.set_property("location", format!("{now} left.mkv"));
-                right_sink.set_property("location", format!("{now} right.mkv"));
+                left_sink.set_property("location", format!("capture/{now} left.mkv"));
+                right_sink.set_property("location", format!("capture/{now} right.mkv"));
 
                 pipeline.set_state(State::Playing).unwrap();
 
                 self.pipeline = Some(pipeline);
                 self.state = CameraState::Capture;
+                
+                info!("capture started");
             }
             CameraActorMessage::StartLivefeed() => {
                 if let CameraState::Livefeed = self.state {
                     return;
                 }
+
+                info!("starting livefeed");
 
                 if let Some(previous) = self.pipeline.take() {
                     previous.set_state(State::Null).unwrap();
@@ -274,6 +304,8 @@ impl CameraActor {
 
                 self.pipeline = Some(pipeline);
                 self.state = CameraState::Livefeed;
+
+                info!("livefeed started");
             }
             CameraActorMessage::SetConvergence((x, y)) => {
                 if let Some(Controls::Livefeed {
@@ -281,13 +313,14 @@ impl CameraActor {
                     right_transform,
                 }) = &self.controls
                 {
-                    left_transform.set_property("translation-x", x/2f32);
-                    left_transform.set_property("translation-y", y/2f32);
-                    right_transform.set_property("translation-x", -x/2f32);
-                    right_transform.set_property("translation-y", -y/2f32);
+                    left_transform.set_property("translation-x", x / 2f32);
+                    left_transform.set_property("translation-y", y / 2f32);
+                    right_transform.set_property("translation-x", -x / 2f32);
+                    right_transform.set_property("translation-y", -y / 2f32);
                 }
             }
             CameraActorMessage::Shutdown() => {
+                self.receiver.close();
                 if let Some(pipeline) = &mut self.pipeline {
                     pipeline.set_state(State::Null).unwrap();
                     self.pipeline = None;

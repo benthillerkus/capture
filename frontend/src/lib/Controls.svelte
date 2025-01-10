@@ -3,7 +3,7 @@
   let y = $state(0);
 
   $effect(() => {
-    fetch("http://localhost:8080/api", {
+    fetch("http://localhost:8080/api/control", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
