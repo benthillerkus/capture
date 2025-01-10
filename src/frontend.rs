@@ -1,23 +1,37 @@
 use std::net::SocketAddr;
 
 use axum::{
-    http::{header, StatusCode, Uri},
+    extract::{self, Path},
+    http::{header, Method, StatusCode, Uri},
     response::{Html, IntoResponse},
     routing::get,
     Router,
 };
+use serde::Deserialize;
 use tokio::sync::mpsc;
-use tower_http::services::ServeFile;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    services::{ServeDir, ServeFile},
+};
 use tracing::info;
 
-#[derive(vite_rs::Embed)]
-#[root = "./frontend"]
-#[dev_server_port = 5173]
-struct Assets;
+use crate::camera::CameraActorHandle;
+
+#[derive(Debug, Deserialize)]
+struct Control {
+    convergence: Option<XY>,
+}
+
+#[derive(Debug, Deserialize)]
+struct XY {
+    x: f32,
+    y: f32,
+}
 
 struct WebServerActor {
     address: SocketAddr,
     receiver: mpsc::Receiver<WebServerActorMessage>,
+    camera: CameraActorHandle,
 }
 
 enum WebServerActorMessage {
@@ -33,28 +47,24 @@ impl WebServerActor {
     }
 
     async fn run(mut actor: Self) {
+        let camera = actor.camera.clone();
         let app = Router::new()
-            .route_service("/output.mp4", ServeFile::new("output.mp4"))
-            .fallback(|uri: Uri| async move {
-                let asset = Assets::get(&uri.path()[1..]);
-
-                if let Some(asset) = asset {
-                    return (
-                        StatusCode::OK,
-                        [
-                            (header::CONTENT_TYPE, asset.content_type),
-                            (header::CONTENT_LENGTH, asset.content_length.to_string()),
-                        ],
-                        asset.bytes,
-                    )
-                        .into_response();
-                }
-                (StatusCode::NOT_FOUND, "Not Found").into_response()
-            });
+            .route(
+                "/api",
+                get(|| async { "use HTTP POST" }).post(
+                    |extract::Json(payload): extract::Json<Control>| async move {
+                        info!("received control: {:?}", payload);
+                        if let Some(XY { x, y }) = payload.convergence {
+                            camera.set_convergence(x, y).await;
+                        }
+                    },
+                ),
+            )
+            .layer(CorsLayer::permissive())
+            .fallback_service(ServeDir::new("frontend/dist"));
 
         let listener: tokio::net::TcpListener =
             tokio::net::TcpListener::bind(actor.address).await.unwrap();
-        info!("listening on http://{}", listener.local_addr().unwrap());
         let server = axum::serve(listener, app);
 
         tokio::select! {
@@ -74,9 +84,13 @@ pub struct WebServerActorHandle {
 }
 
 impl WebServerActorHandle {
-    pub fn new(address: SocketAddr) -> Self {
+    pub fn new(address: SocketAddr, camera: CameraActorHandle) -> Self {
         let (sender, receiver) = mpsc::channel(16);
-        let actor = WebServerActor { receiver, address };
+        let actor = WebServerActor {
+            receiver,
+            address,
+            camera,
+        };
         tokio::spawn(WebServerActor::run(actor));
         Self { sender }
     }

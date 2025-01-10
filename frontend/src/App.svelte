@@ -3,6 +3,7 @@
   import viteLogo from "/vite.svg";
   import Counter from "./lib/Counter.svelte";
   import Stream from "./lib/Stream.svelte";
+    import Controls from "./lib/Controls.svelte";
 </script>
 
 <main>
@@ -22,6 +23,10 @@
 
   <div class="card">
     <Stream></Stream>
+  </div>
+
+  <div class="card">
+    <Controls></Controls>
   </div>
 
   <p>

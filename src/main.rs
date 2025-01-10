@@ -66,11 +66,9 @@ async fn main() -> Result<()> {
     let shutdown = tokio::signal::ctrl_c();
 
     let camera = CameraActorHandle::new();
-    let c1 = camera.clone();
-    let c2 = camera.clone();
     let c3 = camera.clone();
 
-    let webserver = WebServerActorHandle::new(args.address);
+    let webserver = WebServerActorHandle::new(args.address, camera.clone());
 
     c3.start_livefeed().await;
 
@@ -102,28 +100,28 @@ async fn main() -> Result<()> {
         }
     }
 
-    // DEBUG simulate convergence changes
-    {
-        let camera = camera.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                let (x, y) = {
-                    let mut rng = rand::thread_rng();
-                    let x: f32 = rand::distributions::Open01.sample(&mut rng);
-                    let y: f32 = rand::distributions::Open01.sample(&mut rng);
-                    (x, y)
-                };
-                camera.set_convergence(x, y).await;
-            }
-        });
-    }
+    // // DEBUG simulate convergence changes
+    // {
+    //     let camera = camera.clone();
+    //     tokio::spawn(async move {
+    //         loop {
+    //             tokio::time::sleep(Duration::from_secs(1)).await;
+    //             let (x, y) = {
+    //                 let mut rng = rand::thread_rng();
+    //                 let x: f32 = rand::distributions::Open01.sample(&mut rng);
+    //                 let y: f32 = rand::distributions::Open01.sample(&mut rng);
+    //                 (x, y)
+    //             };
+    //             camera.set_convergence(x, y).await;
+    //         }
+    //     });
+    // }
 
     tokio::select! {
         _ = shutdown => {
             info!("received shutdown signal");
-            camera.shutdown().await;
             webserver.shutdown().await;
+            camera.shutdown().await;
         },
     }
 
