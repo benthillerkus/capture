@@ -76,25 +76,25 @@ impl CameraActor {
 
                 #[cfg(target_os = "linux")]
                 {
-                    let left_src = ElementFactory::make("nvarguscamerasrc")
+                    left_src = ElementFactory::make("nvarguscamerasrc")
                         .name("left_src")
                         .property_from_str("sensor_id", "0")
                         .build()
                         .unwrap();
 
-                    let right_src = ElementFactory::make("nvarguscamerasrc")
+                    right_src = ElementFactory::make("nvarguscamerasrc")
                         .name("right_src")
                         .property_from_str("sensor_id", "1")
                         .build()
                         .unwrap();
 
-                    let caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1280,height=(int)720,format=(string)NV12,framerate=(fraction)30/1").unwrap();
+                    caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1280,height=(int)720,format=(string)NV12,framerate=(fraction)30/1").unwrap();
 
-                    let left_enc = ElementFactory::make("nvjpegenc")
+                    left_enc = ElementFactory::make("nvjpegenc")
                         .property_from_str("quality", "95")
                         .build()
                         .unwrap();
-                    let right_enc = ElementFactory::make("nvjpegenc")
+                    right_enc = ElementFactory::make("nvjpegenc")
                         .property_from_str("quality", "95")
                         .build()
                         .unwrap();
