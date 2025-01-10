@@ -24,6 +24,7 @@
       },
       body: JSON.stringify({
         record: isRecording,
+        convergence: null,
       }),
     });
 

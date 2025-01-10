@@ -8,7 +8,7 @@
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ convergence: { x, y } }),
+      body: JSON.stringify({ convergence: { x, y }, record: null }),
     });
   });
 </script>
