@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use frontend::WebServerActorHandle;
 use rand::{prelude::*, rngs};
 
 use camera::{CameraActorHandle, CameraState};
@@ -17,6 +18,8 @@ mod hotspot;
 
 #[cfg(feature = "signalling")]
 mod signalling;
+
+mod frontend;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -67,21 +70,7 @@ async fn main() -> Result<()> {
     let c2 = camera.clone();
     let c3 = camera.clone();
 
-    let app = Router::new()
-        .route(
-            "/",
-            get(|| async { Html(render_page(c1).await) }).post({
-                move || async {
-                    info!("received capture");
-                    match c2.get_state().await {
-                        CameraState::Livefeed | CameraState::Idle => c2.start_capture().await,
-                        CameraState::Capture => c2.start_livefeed().await,
-                    }
-                    Html(render_page(c2).await)
-                }
-            }),
-        )
-        .route_service("/output.mp4", ServeFile::new("output.mp4"));
+    let webserver = WebServerActorHandle::new(args.address);
 
     c3.start_livefeed().await;
 
@@ -113,10 +102,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    let listener = tokio::net::TcpListener::bind(args.address).await?;
-    info!("listening on http://{}", listener.local_addr()?);
-    let server = axum::serve(listener, app);
-
+    // DEBUG simulate convergence changes
     {
         let camera = camera.clone();
         tokio::spawn(async move {
@@ -137,13 +123,8 @@ async fn main() -> Result<()> {
         _ = shutdown => {
             info!("received shutdown signal");
             camera.shutdown().await;
+            webserver.shutdown().await;
         },
-        res = server => {
-            if let Err(err) = res {
-                warn!("server error: {:?}", err);
-            }
-            warn!("server closed");
-        }
     }
 
     #[cfg(all(feature = "hotspot", not(target_os = "macos")))]
@@ -156,26 +137,4 @@ async fn main() -> Result<()> {
     info!("shutdown complete");
 
     Ok(())
-}
-
-async fn render_page(camera: CameraActorHandle) -> String {
-    let state = camera.get_state().await;
-    let has_video_file = std::path::Path::new("output.mp4").exists();
-    include_str!("../index.html")
-        .replace(
-            "{video}",
-            if has_video_file {
-                r#"<video controls width="200px" src="output.mp4" type="video/mp4"></video>"#
-            } else {
-                ""
-            },
-        )
-        .replace(
-            "{app_state}",
-            match state {
-                CameraState::Idle | CameraState::Livefeed => "Capture",
-                CameraState::Capture => "Stop Capturing",
-            },
-        )
-        .to_string()
 }
