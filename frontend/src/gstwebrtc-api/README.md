@@ -1,0 +1,1 @@
+This directory has been copy pasted from [https//](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/tree/main/net/webrtc/gstwebrtc-api?ref_type=heads)
