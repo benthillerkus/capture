@@ -1,15 +1,11 @@
-use std::sync::Arc;
+use std::time::Duration;
+
+use rand::{prelude::*, rngs};
 
 use camera::{CameraActorHandle, CameraState};
 use clap::Parser;
 
-use tokio::{fs, process::Command, sync::Mutex};
-
-use axum::{
-    response::Html,
-    routing::{get, post},
-    Extension, Router,
-};
+use axum::{response::Html, routing::get, Router};
 use color_eyre::eyre::Result;
 use tower_http::services::ServeFile;
 use tracing::{info, warn};
@@ -120,6 +116,22 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(args.address).await?;
     info!("listening on http://{}", listener.local_addr()?);
     let server = axum::serve(listener, app);
+
+    {
+        let camera = camera.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                let (x, y) = {
+                    let mut rng = rand::thread_rng();
+                    let x: f32 = rand::distributions::Open01.sample(&mut rng);
+                    let y: f32 = rand::distributions::Open01.sample(&mut rng);
+                    (x, y)
+                };
+                camera.set_convergence(x, y).await;
+            }
+        });
+    }
 
     tokio::select! {
         _ = shutdown => {

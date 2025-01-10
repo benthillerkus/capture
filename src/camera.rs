@@ -3,15 +3,21 @@ use std::str::FromStr;
 use gstreamer::{prelude::*, Element};
 use gstreamer::{ElementFactory, Pipeline, State};
 use time::{format_description, OffsetDateTime};
-use tokio::{process, sync::mpsc};
-use tracing::{error, info};
-use tracing_subscriber::fmt::time::SystemTime;
-use windows::Foundation::DateTime;
+use tokio::sync::mpsc;
 
 struct CameraActor {
     receiver: mpsc::Receiver<CameraActorMessage>,
-    current_process: Option<Pipeline>,
+    pipeline: Option<Pipeline>,
+    controls: Option<Controls>,
     state: CameraState,
+}
+
+enum Controls {
+    Capture {},
+    Livefeed {
+        left_transform: Element,
+        right_transform: Element,
+    },
 }
 
 #[derive(Copy, Clone)]
@@ -25,6 +31,7 @@ enum CameraActorMessage {
     StartCapture(),
     StartLivefeed(),
     GetState(tokio::sync::oneshot::Sender<CameraState>),
+    SetConvergence((f32, f32)),
     Shutdown(),
 }
 
@@ -32,7 +39,8 @@ impl CameraActor {
     fn new(receiver: mpsc::Receiver<CameraActorMessage>) -> Self {
         Self {
             receiver,
-            current_process: None,
+            pipeline: None,
+            controls: None,
             state: CameraState::Idle,
         }
     }
@@ -49,9 +57,10 @@ impl CameraActor {
                     return;
                 }
 
-                if let Some(mut previous) = self.current_process.take() {
+                if let Some(previous) = self.pipeline.take() {
                     previous.set_state(State::Null).unwrap();
                 }
+                self.controls = None;
 
                 let pipeline = Pipeline::new();
 
@@ -123,7 +132,7 @@ impl CameraActor {
 
                 pipeline.set_state(State::Playing).unwrap();
 
-                self.current_process = Some(pipeline);
+                self.pipeline = Some(pipeline);
                 self.state = CameraState::Capture;
             }
             CameraActorMessage::StartLivefeed() => {
@@ -131,9 +140,10 @@ impl CameraActor {
                     return;
                 }
 
-                if let Some(mut previous) = self.current_process.take() {
+                if let Some(previous) = self.pipeline.take() {
                     previous.set_state(State::Null).unwrap();
                 }
+                self.controls = None;
 
                 let pipeline = Pipeline::new();
 
@@ -194,6 +204,15 @@ impl CameraActor {
                 let left_glupload = ElementFactory::make("glupload").build().unwrap();
                 let right_glupload = ElementFactory::make("glupload").build().unwrap();
 
+                let left_transform = ElementFactory::make("gltransformation")
+                    .property("translation-x", 0.0f32)
+                    .build()
+                    .unwrap();
+                let right_transform = ElementFactory::make("gltransformation")
+                    .property("translation-x", -0.1f32)
+                    .build()
+                    .unwrap();
+
                 let glviewconvert = ElementFactory::make("glviewconvert")
                     .property_from_str("output-mode-override", "mono")
                     .property_from_str("downmix-mode", "1")
@@ -216,9 +235,11 @@ impl CameraActor {
                         &left_src,
                         &left_conv,
                         &left_glupload,
+                        &left_transform,
                         &right_src,
                         &right_conv,
                         &right_glupload,
+                        &right_transform,
                         &mix,
                         &queue,
                         &glviewconvert,
@@ -230,12 +251,14 @@ impl CameraActor {
                 left_src.link_filtered(&left_conv, &caps).unwrap();
 
                 left_conv.link(&left_glupload).unwrap();
-                left_glupload.link(&mix).unwrap();
+                left_glupload.link(&left_transform).unwrap();
+                left_transform.link(&mix).unwrap();
 
                 right_src.link_filtered(&right_conv, &caps).unwrap();
 
                 right_conv.link(&right_glupload).unwrap();
-                right_glupload.link(&mix).unwrap();
+                right_glupload.link(&right_transform).unwrap();
+                right_transform.link(&mix).unwrap();
 
                 mix.link_filtered(&glviewconvert, &mix_caps).unwrap();
                 glviewconvert.link(&queue).unwrap();
@@ -244,13 +267,30 @@ impl CameraActor {
 
                 pipeline.set_state(State::Playing).unwrap();
 
-                self.current_process = Some(pipeline);
+                self.controls = Some(Controls::Livefeed {
+                    left_transform,
+                    right_transform,
+                });
+
+                self.pipeline = Some(pipeline);
                 self.state = CameraState::Livefeed;
             }
+            CameraActorMessage::SetConvergence((x, y)) => {
+                if let Some(Controls::Livefeed {
+                    left_transform,
+                    right_transform,
+                }) = &self.controls
+                {
+                    left_transform.set_property("translation-x", x/2f32);
+                    left_transform.set_property("translation-y", y/2f32);
+                    right_transform.set_property("translation-x", -x/2f32);
+                    right_transform.set_property("translation-y", -y/2f32);
+                }
+            }
             CameraActorMessage::Shutdown() => {
-                if let Some(pipeline) = &mut self.current_process {
+                if let Some(pipeline) = &mut self.pipeline {
                     pipeline.set_state(State::Null).unwrap();
-                    self.current_process = None;
+                    self.pipeline = None;
                 }
                 self.state = CameraState::Idle;
             }
@@ -289,6 +329,13 @@ impl CameraActorHandle {
 
     pub async fn start_livefeed(&self) {
         let _ = self.sender.send(CameraActorMessage::StartLivefeed()).await;
+    }
+
+    pub async fn set_convergence(&self, x: f32, y: f32) {
+        let _ = self
+            .sender
+            .send(CameraActorMessage::SetConvergence((x, y)))
+            .await;
     }
 
     pub async fn shutdown(&self) {

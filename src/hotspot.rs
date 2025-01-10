@@ -1,7 +1,7 @@
 use tokio::task;
 
 use color_eyre::eyre::Result;
-use tracing::{info, warn};
+use tracing::info;
 
 pub(crate) trait Hotspot {
     async fn start(&self) -> Result<()>;
