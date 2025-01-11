@@ -1,9 +1,11 @@
 <script>
+  const API_HOST = import.meta.env.VITE_API_HOST;
+
   let x = $state(0);
   let y = $state(0);
 
   $effect(() => {
-    fetch("http://localhost:8080/api/control", {
+    fetch(`${API_HOST}/api/control`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

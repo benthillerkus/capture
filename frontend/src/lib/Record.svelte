@@ -1,10 +1,12 @@
 <script>
+  const API_HOST = import.meta.env.VITE_API_HOST;
+
   import { onMount } from "svelte";
 
   let isRecording = $state(false);
 
   onMount(() => {
-    fetch("http://localhost:8080/api/state", {
+    fetch(`${API_HOST}/api/state`, {
       method: "GET",
     })
       .then((response) => {
@@ -17,7 +19,7 @@
 
   async function record() {
     isRecording = !isRecording;
-    let response = await fetch("http://localhost:8080/api/control", {
+    let response = await fetch(`${API_HOST}/api/state`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
