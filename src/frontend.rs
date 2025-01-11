@@ -17,13 +17,13 @@ use tracing::info;
 
 use crate::camera::CameraActorHandle;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 struct Control {
     convergence: Option<XY>,
     record: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 struct XY {
     x: f32,
     y: f32,
@@ -115,5 +115,55 @@ impl WebServerActorHandle {
 
     pub async fn shutdown(&self) {
         let _ = self.sender.send(WebServerActorMessage::Shutdown).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_xy_deserialize() {
+        let xy: XY = serde_json::from_str(r#"{"x": 1.0, "y": 2.0}"#).unwrap();
+        assert_eq!(xy.x, 1.0);
+        assert_eq!(xy.y, 2.0);
+    }
+
+    #[test]
+    fn test_control_deserialize() {
+        let control: Control =
+            serde_json::from_str(r#"{"convergence": {"x": 1.0, "y": 2.0}, "record": true}"#)
+                .unwrap();
+        assert!(matches!(control.convergence, Some(XY { x: 1.0, y: 2.0 })));
+        assert!(control.record.unwrap());
+    }
+
+    #[test]
+    fn test_control_deserialize_no_convergence() {
+        let control: Control = serde_json::from_str(r#"{"record": true}"#).unwrap();
+        assert_eq!(control.convergence, None);
+        assert!(control.record.unwrap());
+    }
+
+    #[test]
+    fn test_control_deserialize_no_record() {
+        let control: Control =
+            serde_json::from_str(r#"{"convergence": {"x": 1.0, "y": 2.0}}"#).unwrap();
+        assert!(matches!(control.convergence, Some(XY { x: 1.0, y: 2.0 })));
+        assert_eq!(control.record, None);
+    }
+
+    #[test]
+    fn test_control_deserialize_empty() {
+        let control: Control = serde_json::from_str(r#"{}"#).unwrap();
+        assert_eq!(control.convergence, None);
+        assert_eq!(control.record, None);
+    }
+
+    #[test]
+    fn test_control_deserialize_empty_record() {
+        let control: Control = serde_json::from_str(r#"{"record": null}"#).unwrap();
+        assert_eq!(control.convergence, None);
+        assert_eq!(control.record, None);
     }
 }
