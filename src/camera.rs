@@ -100,9 +100,11 @@ impl CameraActor {
                     caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1280,height=(int)720,format=(string)NV12,framerate=(fraction)60/1").unwrap();
 
                     left_conv = ElementFactory::make("nvvidconv")
+                        .property_from_str("flip-method", "2")
                         .build()
                         .unwrap();
                     right_conv = ElementFactory::make("nvvidconv")
+                        .property_from_str("flip-method", "2")
                         .build()
                         .unwrap();
 
