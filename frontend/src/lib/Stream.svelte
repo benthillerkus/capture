@@ -60,11 +60,14 @@
 </script>
 
 <!-- svelte-ignore a11y_media_has_caption -->
-{#if api}
+{#if session}
+  {#if !interacted}
+    <p>Click to start stream!</p>
+  {/if}
   <video controls bind:this={video} onplay={(_) => (interacted = true)}>
   </video>
 {:else}
-  <p>Waiting for API to initialize...</p>
+  <p>Connecting to Camera...</p>
 {/if}
 
 <style>
