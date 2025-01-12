@@ -19,7 +19,7 @@
 
   async function record() {
     isRecording = !isRecording;
-    let response = await fetch(`${API_HOST}/api/state`, {
+    let response = await fetch(`${API_HOST}/api/control`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
