@@ -118,7 +118,7 @@ impl CameraActor {
                 .property("awblock", true)
                 .build()?;
 
-            caps = gstreamer::Caps::from_str(format!("video/x-raw(memory:NVMM),width=(int){},height=(int){},format=(string){},framerate=(fraction){}/1", self.configuration.width, self.configuration.height, self.configuration.format, self.configuration.fps))?;
+            caps = gstreamer::Caps::from_str(&format!("video/x-raw(memory:NVMM),width=(int){},height=(int){},format=(string){},framerate=(fraction){}/1", self.configuration.width, self.configuration.height, self.configuration.format, self.configuration.fps))?;
 
             left_conv = ElementFactory::make("nvvidconv")
                 .property_from_str("flip-method", "2")
@@ -237,7 +237,7 @@ impl CameraActor {
                 .property_from_str("sensor_id", "1")
                 .build()?;
 
-            caps = gstreamer::Caps::from_str(format!("video/x-raw(memory:NVMM),width=(int){},height=(int){},format=(string){},framerate=(fraction){}/1", self.configuration.width, self.configuration.height, self.configuration.format, self.configuration.fps))?;
+            caps = gstreamer::Caps::from_str(&format!("video/x-raw(memory:NVMM),width=(int){},height=(int){},format=(string){},framerate=(fraction){}/1", self.configuration.width, self.configuration.height, self.configuration.format, self.configuration.fps))?;
 
             left_conv = ElementFactory::make("nvvidconv")
                 .property_from_str("flip-method", "2")
