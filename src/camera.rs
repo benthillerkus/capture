@@ -125,14 +125,17 @@ impl CameraActor {
                         .field("format", "NV12")
                         .field("framerate", gstreamer::Fraction::new(30, 1))
                         .build();
-                    left_conv = ElementFactory::make("videoconvert").build().unwrap();
-                    right_conv = ElementFactory::make("videoconvert").build().unwrap();
+                    left_conv = ElementFactory::make("identity").build().unwrap();
+                    right_conv = ElementFactory::make("identity").build().unwrap();
                     left_enc = ElementFactory::make("avenc_prores").build().unwrap();
                     right_enc = ElementFactory::make("avenc_prores").build().unwrap();
                 }
 
                 let left_queue = ElementFactory::make("queue").build().unwrap();
                 let right_queue = ElementFactory::make("queue").build().unwrap();
+
+                let left_videoconvert = ElementFactory::make("videoconvert").build().unwrap();
+                let right_videoconvert = ElementFactory::make("videoconvert").build().unwrap();
 
                 let left_mux = ElementFactory::make("qtmux").build().unwrap();
                 let right_mux = ElementFactory::make("qtmux").build().unwrap();
@@ -145,10 +148,12 @@ impl CameraActor {
                         &left_src,
                         &left_conv,
                         &left_queue,
+                        &left_videoconvert,
                         &left_enc,
                         &right_src,
                         &right_conv,
                         &right_queue,
+                        &right_videoconvert,
                         &right_enc,
                         &left_mux,
                         &right_mux,
@@ -158,12 +163,15 @@ impl CameraActor {
                     .unwrap();
 
                 left_src.link_filtered(&left_conv, &caps).unwrap();
-                right_src.link_filtered(&right_conv, &caps).unwrap();
                 left_conv.link(&left_queue).unwrap();
-                right_conv.link(&right_queue).unwrap();
-                left_queue.link(&left_enc).unwrap();
-                right_queue.link(&right_enc).unwrap();
+                left_queue.link(&left_videoconvert).unwrap();
+                left_videoconvert.link(&left_enc).unwrap();
                 left_enc.link(&left_mux).unwrap();
+                
+                right_src.link_filtered(&right_conv, &caps).unwrap();
+                right_conv.link(&right_queue).unwrap();
+                right_queue.link(&right_videoconvert).unwrap();
+                right_videoconvert.link(&right_enc).unwrap();
                 right_enc.link(&right_mux).unwrap();
 
                 left_mux.link(&left_sink).unwrap();
@@ -209,7 +217,7 @@ impl CameraActor {
 
                 let left_src: Element;
                 let right_src: Element;
-                let caps: gstreamer::Caps;
+                let mut caps: gstreamer::Caps;
                 let left_conv: Element;
                 let right_conv: Element;
                 #[cfg(target_os = "linux")]
