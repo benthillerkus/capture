@@ -257,6 +257,8 @@ impl CameraActor {
                 let sink = ElementFactory::make("webrtcsink")
                     .name("sink")
                     .property_from_str("meta", "meta")
+                    .property_from_str("congestion-control", "0")
+                    .property_from_str("stun-server", "")
                     .build()
                     .unwrap();
 
