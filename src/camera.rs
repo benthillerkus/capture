@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
-use gstreamer::{prelude::*, Element};
+use gstreamer::ffi::{GST_MESSAGE_EOS, GST_MESSAGE_ERROR};
+use gstreamer::{event, message, prelude::*, Element, MessageType};
 use gstreamer::{ElementFactory, Pipeline, State};
 use serde::Serialize;
 use time::{format_description, OffsetDateTime};
@@ -71,6 +72,8 @@ impl CameraActor {
                 let left_src: Element;
                 let right_src: Element;
                 let caps: gstreamer::Caps;
+                let left_conv: Element;
+                let right_conv: Element;
                 let left_enc: Element;
                 let right_enc: Element;
 
@@ -96,12 +99,19 @@ impl CameraActor {
 
                     caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1920,height=(int)1080,format=(string)NV12,framerate=(fraction)60/1").unwrap();
 
-                    left_enc = ElementFactory::make("nvjpegenc")
-                        .property("quality",95)
+                    left_conv = ElementFactory::make("nvvidconv")
                         .build()
                         .unwrap();
-                    right_enc = ElementFactory::make("nvjpegenc")
-                        .property("quality", 95)
+                    right_conv = ElementFactory::make("nvvidconv")
+                        .build()
+                        .unwrap();
+
+                    left_enc = ElementFactory::make("avenc_prores")
+                        // .property("quality", 95)
+                        .build()
+                        .unwrap();
+                    right_enc = ElementFactory::make("avenc_prores")
+                        // .property("quality", 95)
                         .build()
                         .unwrap();
                 }
@@ -115,15 +125,17 @@ impl CameraActor {
                         .field("format", "NV12")
                         .field("framerate", gstreamer::Fraction::new(30, 1))
                         .build();
-                    left_enc = ElementFactory::make("jpegenc").build().unwrap();
-                    right_enc = ElementFactory::make("jpegenc").build().unwrap();
+                    left_conv = ElementFactory::make("videoconvert").build().unwrap();
+                    right_conv = ElementFactory::make("videoconvert").build().unwrap();
+                    left_enc = ElementFactory::make("avenc_prores").build().unwrap();
+                    right_enc = ElementFactory::make("avenc_prores").build().unwrap();
                 }
 
                 let left_queue = ElementFactory::make("queue").build().unwrap();
                 let right_queue = ElementFactory::make("queue").build().unwrap();
 
-                let left_mux = ElementFactory::make("matroskamux").build().unwrap();
-                let right_mux = ElementFactory::make("matroskamux").build().unwrap();
+                let left_mux = ElementFactory::make("qtmux").build().unwrap();
+                let right_mux = ElementFactory::make("qtmux").build().unwrap();
 
                 let left_sink = ElementFactory::make("filesink").build().unwrap();
                 let right_sink = ElementFactory::make("filesink").build().unwrap();
@@ -131,11 +143,13 @@ impl CameraActor {
                 pipeline
                     .add_many([
                         &left_src,
-                        &left_enc,
+                        &left_conv,
                         &left_queue,
+                        &left_enc,
                         &right_src,
-                        &right_enc,
+                        &right_conv,
                         &right_queue,
+                        &right_enc,
                         &left_mux,
                         &right_mux,
                         &left_sink,
@@ -143,13 +157,14 @@ impl CameraActor {
                     ])
                     .unwrap();
 
-                left_src.link_filtered(&left_enc, &caps).unwrap();
-                right_src.link_filtered(&right_enc, &caps).unwrap();
-
-                right_enc.link(&right_queue).unwrap();
-                left_enc.link(&left_queue).unwrap();
-                right_queue.link(&right_mux).unwrap();
-                left_queue.link(&left_mux).unwrap();
+                left_src.link_filtered(&left_conv, &caps).unwrap();
+                right_src.link_filtered(&right_conv, &caps).unwrap();
+                left_conv.link(&left_queue).unwrap();
+                right_conv.link(&right_queue).unwrap();
+                left_queue.link(&left_enc).unwrap();
+                right_queue.link(&right_enc).unwrap();
+                left_enc.link(&left_mux).unwrap();
+                right_enc.link(&right_mux).unwrap();
 
                 left_mux.link(&left_sink).unwrap();
                 right_mux.link(&right_sink).unwrap();
@@ -159,14 +174,14 @@ impl CameraActor {
                         .unwrap();
                 let now = OffsetDateTime::now_utc().format(&format).unwrap();
 
-                left_sink.set_property("location", format!("capture/{now} left.mkv"));
-                right_sink.set_property("location", format!("capture/{now} right.mkv"));
+                left_sink.set_property("location", format!("capture/{now} left.mov"));
+                right_sink.set_property("location", format!("capture/{now} right.mov"));
 
                 pipeline.set_state(State::Playing).unwrap();
 
                 self.pipeline = Some(pipeline);
                 self.state = CameraState::Capture;
-                
+
                 info!("capture started");
             }
             CameraActorMessage::StartLivefeed() => {
@@ -177,7 +192,16 @@ impl CameraActor {
                 info!("starting livefeed");
 
                 if let Some(previous) = self.pipeline.take() {
-                    previous.set_state(State::Null).unwrap();
+                    let shutdown = tokio::task::spawn_blocking(|| async move {
+                        previous.send_event(event::Eos::new());
+                        let _message = previous
+                            .bus()
+                            .unwrap()
+                            .timed_pop_filtered(None, &[MessageType::Eos, MessageType::Error])
+                            .unwrap();
+                        previous.set_state(State::Null).unwrap();
+                    });
+                    shutdown.await.unwrap().await;
                 }
                 self.controls = None;
 
