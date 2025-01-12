@@ -115,8 +115,8 @@
   <label
     >Codec
     <select bind:value={codec}>
-      <option value="Prores"></option>
-      <option value="MotionJpeg"></option>
+      <option value="Prores">Prores</option>
+      <option value="MotionJpeg">MotionJpeg</option>
     </select>
   </label>
 </div>
