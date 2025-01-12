@@ -78,24 +78,30 @@ impl CameraActor {
                 {
                     left_src = ElementFactory::make("nvarguscamerasrc")
                         .name("left_src")
-                        .property_from_str("sensor_id", "0")
+                        .property("sensor_id", 0)
+                        .property_from_str("tnr-mode", "0")
+                        .property_from_str("ee-mode", "0")
+                        .property("awblock", true)
                         .build()
                         .unwrap();
 
                     right_src = ElementFactory::make("nvarguscamerasrc")
                         .name("right_src")
-                        .property_from_str("sensor_id", "1")
+                        .property("sensor_id", 1)
+                        .property_from_str("tnr-mode", "0")
+                        .property_from_str("ee-mode", "0")
+                        .property("awblock", true)
                         .build()
                         .unwrap();
 
-                    caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1920,height=(int)1080,format=(string)RGB,framerate=(fraction)60/1").unwrap();
+                    caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1920,height=(int)1080,format=(string)NV12,framerate=(fraction)60/1").unwrap();
 
                     left_enc = ElementFactory::make("nvjpegenc")
-                        .property_from_str("quality", "95")
+                        .property("quality",95)
                         .build()
                         .unwrap();
                     right_enc = ElementFactory::make("nvjpegenc")
-                        .property_from_str("quality", "95")
+                        .property("quality", 95)
                         .build()
                         .unwrap();
                 }
