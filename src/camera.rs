@@ -139,8 +139,8 @@ impl CameraActor {
             left_src = ElementFactory::make("videotestsrc").build()?;
             right_src = ElementFactory::make("videotestsrc").build()?;
             caps = gstreamer::Caps::builder("video/x-raw")
-                .field("width", self.configuration.width as u32)
-                .field("height", self.configuration.height as u32)
+                .field("width", self.configuration.width as i32)
+                .field("height", self.configuration.height as i32)
                 .field("format", self.configuration.format.to_string())
                 .field(
                     "framerate",
@@ -237,7 +237,7 @@ impl CameraActor {
                 .property_from_str("sensor_id", "1")
                 .build()?;
 
-            caps = gstreamer::Caps::from_str("video/x-raw(memory:NVMM),width=(int)1280,height=(int)720,format=(string)NV12,framerate=(fraction)60/1")?;
+            caps = gstreamer::Caps::from_str(format!("video/x-raw(memory:NVMM),width=(int){},height=(int){},format=(string){},framerate=(fraction){}/1", self.configuration.width, self.configuration.height, self.configuration.format, self.configuration.fps))?;
 
             left_conv = ElementFactory::make("nvvidconv")
                 .property_from_str("flip-method", "2")
@@ -257,10 +257,13 @@ impl CameraActor {
                 .property_from_str("motion", "sweep")
                 .build()?;
             caps = gstreamer::Caps::builder("video/x-raw")
-                .field("width", 1280)
-                .field("height", 720)
-                .field("format", "NV12")
-                .field("framerate", gstreamer::Fraction::new(60, 1))
+                .field("width", self.configuration.width as i32)
+                .field("height", self.configuration.height as i32)
+                .field("format", self.configuration.format.to_string())
+                .field(
+                    "framerate",
+                    gstreamer::Fraction::new(self.configuration.fps as i32, 1),
+                )
                 .build();
             left_conv = ElementFactory::make("videoconvert").build()?;
             right_conv = ElementFactory::make("videoconvert").build()?;
@@ -399,8 +402,30 @@ impl CameraActor {
                     }
                     if let Some(anaglyph_format) = configuration.anaglyph_format {
                         if anaglyph_format != self.configuration.anaglyph_format {
-                            glviewconvert
-                            .set_property_from_str("downmix-mode", anaglyph_format.as_gst_str());
+                            glviewconvert.set_property_from_str(
+                                "downmix-mode",
+                                anaglyph_format.as_gst_str(),
+                            );
+                        }
+                    }
+                    if let Some(width) = configuration.width {
+                        if width != self.configuration.width {
+                            needs_restarting = true;
+                        }
+                    }
+                    if let Some(height) = configuration.height {
+                        if height != self.configuration.height {
+                            needs_restarting = true;
+                        }
+                    }
+                    if let Some(fps) = configuration.fps {
+                        if fps != self.configuration.fps {
+                            needs_restarting = true;
+                        }
+                    }
+                    if let Some(format) = configuration.format {
+                        if format != self.configuration.format {
+                            needs_restarting = true;
                         }
                     }
                     self.configuration = self.configuration.merge(&configuration);
