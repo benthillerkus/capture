@@ -61,7 +61,7 @@
 
 <!-- svelte-ignore a11y_media_has_caption -->
 {#if api}
-  <video controls bind:this={video} onclick={(_) => (interacted = true)}>
+  <video controls bind:this={video} onplay={(_) => (interacted = true)}>
   </video>
 {:else}
   <p>Waiting for API to initialize...</p>
