@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use color_eyre::Result;
+use configuration::VideoCodec;
 use gstreamer::{event, message, prelude::*, Element, MessageType};
 use gstreamer::{ElementFactory, Pipeline, State};
 use serde::{Deserialize, Serialize};
@@ -127,12 +128,22 @@ impl CameraActor {
                 .property_from_str("flip-method", "2")
                 .build()?;
 
-            left_enc = ElementFactory::make("avenc_prores")
-                // .property("quality", 95)
-                .build()?;
-            right_enc = ElementFactory::make("avenc_prores")
-                // .property("quality", 95)
-                .build()?;
+            match self.configuration.codec {
+                VideoCodec::Prores => {
+                    left_enc = ElementFactory::make("avenc_prores")
+                        .build()?;
+                    right_enc = ElementFactory::make("avenc_prores")
+                        .build()?;
+                }
+                VideoCodec::MotionJpeg => {
+                    left_enc = ElementFactory::make("jpegenc")
+                        .property("quality", 95)
+                        .build()?;
+                    right_enc = ElementFactory::make("jpegenc")
+                        .property("quality", 95)
+                        .build()?;
+                }
+            }
         }
         #[cfg(not(target_os = "linux"))]
         {
@@ -149,8 +160,20 @@ impl CameraActor {
                 .build();
             left_conv = ElementFactory::make("identity").build()?;
             right_conv = ElementFactory::make("identity").build()?;
-            left_enc = ElementFactory::make("avenc_prores").build()?;
-            right_enc = ElementFactory::make("avenc_prores").build()?;
+            match self.configuration.codec {
+                VideoCodec::Prores => {
+                    left_enc = ElementFactory::make("avenc_prores").build()?;
+                    right_enc = ElementFactory::make("avenc_prores").build()?;
+                }
+                VideoCodec::MotionJpeg => {
+                    left_enc = ElementFactory::make("jpegenc")
+                        .property("quality", 95)
+                        .build()?;
+                    right_enc = ElementFactory::make("jpegenc")
+                        .property("quality", 95)
+                        .build()?;
+                }
+            }
         }
 
         let left_queue = ElementFactory::make("queue").build()?;
@@ -159,8 +182,18 @@ impl CameraActor {
         let left_videoconvert = ElementFactory::make("videoconvert").build()?;
         let right_videoconvert = ElementFactory::make("videoconvert").build()?;
 
-        let left_mux = ElementFactory::make("qtmux").build()?;
-        let right_mux = ElementFactory::make("qtmux").build()?;
+        let left_mux: Element;
+        let right_mux: Element;
+        match self.configuration.codec {
+            VideoCodec::Prores => {
+                left_mux = ElementFactory::make("qtmux").build()?;
+                right_mux = ElementFactory::make("qtmux").build()?;
+            }
+            VideoCodec::MotionJpeg => {
+                left_mux = ElementFactory::make("matroskamux").build()?;
+                right_mux = ElementFactory::make("matroskamux").build()?;
+            }
+        }
 
         let left_sink = ElementFactory::make("filesink").build()?;
         let right_sink = ElementFactory::make("filesink").build()?;
@@ -200,8 +233,12 @@ impl CameraActor {
         let format = format_description::parse("[year]-[month]-[day] [hour]-[minute]-[second]")?;
         let now = OffsetDateTime::now_utc().format(&format)?;
 
-        left_sink.set_property("location", format!("gallery/{now} left.mov"));
-        right_sink.set_property("location", format!("gallery/{now} right.mov"));
+        let ext = match self.configuration.codec {
+            VideoCodec::Prores => "mov",
+            VideoCodec::MotionJpeg => "mkv",
+        };
+        left_sink.set_property("location", format!("gallery/{now} left.{ext}"));
+        right_sink.set_property("location", format!("gallery/{now} right.{ext}"));
 
         pipeline.set_state(State::Playing)?;
 

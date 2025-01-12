@@ -11,6 +11,7 @@ pub struct Configuration {
     pub convergence: (f32, f32),
     pub multiview_mode: MultiviewMode,
     pub anaglyph_format: AnaglyphFormat,
+    pub codec: VideoCodec,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Default)]
@@ -22,6 +23,7 @@ pub struct NullableConfiguration {
     pub convergence: Option<(f32, f32)>,
     pub multiview_mode: Option<MultiviewMode>,
     pub anaglyph_format: Option<AnaglyphFormat>,
+    pub codec: Option<VideoCodec>,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Default)]
@@ -43,6 +45,13 @@ impl AnaglyphFormat {
             AnaglyphFormat::AmberBlue => "2",
         }
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, Default)]
+pub enum VideoCodec {
+    Prores,
+    #[default]
+    MotionJpeg,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -130,6 +139,7 @@ impl Default for Configuration {
             convergence: (0.0, 0.0),
             multiview_mode: MultiviewMode(gstreamer_video::VideoMultiviewMode::SideBySide),
             anaglyph_format: AnaglyphFormat::default(),
+            codec: VideoCodec::default(),
         }
     }
 }
@@ -144,6 +154,7 @@ impl From<Configuration> for NullableConfiguration {
             convergence: Some(config.convergence),
             multiview_mode: Some(config.multiview_mode),
             anaglyph_format: Some(config.anaglyph_format),
+            codec: Some(config.codec),
         }
     }
 }
@@ -160,6 +171,7 @@ impl From<NullableConfiguration> for Configuration {
             convergence: config.convergence.unwrap_or(default.convergence),
             multiview_mode: config.multiview_mode.unwrap_or(default.multiview_mode),
             anaglyph_format: config.anaglyph_format.unwrap_or(default.anaglyph_format),
+            codec: config.codec.unwrap_or(default.codec),
         }
     }
 }
@@ -174,6 +186,7 @@ impl Configuration {
             convergence: other.convergence.unwrap_or(self.convergence),
             multiview_mode: other.multiview_mode.unwrap_or(self.multiview_mode),
             anaglyph_format: other.anaglyph_format.unwrap_or(self.anaglyph_format),
+            codec: other.codec.unwrap_or(self.codec),
         }
     }
 }
@@ -188,6 +201,7 @@ impl NullableConfiguration {
             convergence: other.convergence.or(self.convergence),
             multiview_mode: other.multiview_mode.or(self.multiview_mode),
             anaglyph_format: other.anaglyph_format.or(self.anaglyph_format),
+            codec: other.codec.or(self.codec),
         }
     }
 }

@@ -6,6 +6,7 @@
   let multiview_mode = $state("none");
   let anaglyph_format = $state("red-cyan");
   let resolution_idx = $state("4");
+  let codec = $state("MotionJpeg");
 
   $effect(() => {
     let _ = resolution_idx;
@@ -35,6 +36,7 @@
         multiview_mode,
         anaglyph_format,
         ...resolution,
+        codec,
       }),
     })
       .then((response) => {
@@ -62,6 +64,7 @@
             resolution_idx = "4";
             break;
         }
+        codec = body.codec;
       });
   });
 </script>
@@ -107,6 +110,13 @@
       <option value="2">1920x1080@30fps</option>
       <option value="3">1640x1232@30fps</option>
       <option value="4"> 1280x720@60fps</option>
-    </select></label
-  >
+    </select>
+  </label>
+  <label
+    >Codec
+    <select bind:value={codec}>
+      <option value="Prores"></option>
+      <option value="MotionJpeg"></option>
+    </select>
+  </label>
 </div>
