@@ -20,12 +20,13 @@ windows = { version = "0.56.0", optional = true, features = [
 gstreamer = "0.23.4"
 gst-plugin-webrtc = "0.13.4"
 gst-plugin-webrtc-signalling = { version = "0.13.3", optional = true }
-tokio-native-tls = {version = "0.3.1", optional = true }
+tokio-native-tls = { version = "0.3.1", optional = true }
 time = { version = "0.3.37", features = ["formatting"] }
 regex = { version = "1.11.1", features = ["use_std"] }
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.135"
+gstreamer-video = "0.23.4"
 
 [features]
 default = ["hotspot", "signalling"]

@@ -632,6 +632,7 @@ dependencies = [
  "gst-plugin-webrtc",
  "gst-plugin-webrtc-signalling",
  "gstreamer",
+ "gstreamer-video",
  "rand",
  "regex",
  "serde",

@@ -1,8 +1,8 @@
 /target
-/capture/*.mkv
-/capture/*.mp4
-/capture/*.webm
-/capture/*.mov
+/gallery/*.mkv
+/gallery/*.mp4
+/gallery/*.webm
+/gallery/*.mov
 
 # Logs
 logs

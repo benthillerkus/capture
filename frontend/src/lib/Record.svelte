@@ -10,27 +10,24 @@
       method: "GET",
     })
       .then((response) => {
-        return response.text();
+        return response.json();
       })
       .then((body) => {
-        isRecording = body == "Capture";
+        isRecording = body[0] == "Capture";
       });
   });
 
   async function record() {
     isRecording = !isRecording;
-    let response = await fetch(`${API_HOST}/api/control`, {
+    let response = await fetch(`${API_HOST}/api/record`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        record: isRecording,
-        convergence: null,
-      }),
+      body: JSON.stringify(isRecording),
     });
 
-    let body = await response.text();
+    let body = (await response.json())[0];
 
     if (body == "Capture") {
       isRecording = true;
