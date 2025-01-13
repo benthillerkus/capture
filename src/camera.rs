@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use color_eyre::Result;
 use configuration::VideoCodec;
-use gstreamer::{event, message, prelude::*, Element, MessageType};
+use gstreamer::{event, prelude::*, Element, MessageType};
 use gstreamer::{ElementFactory, Pipeline, State};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use time::{format_description, OffsetDateTime};
 use tokio::sync::mpsc;
 use tracing::info;

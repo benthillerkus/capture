@@ -9,7 +9,7 @@ use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
 use tokio::{fs, task};
 use tokio_native_tls::native_tls;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 

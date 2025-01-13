@@ -42,10 +42,18 @@
 
 <style>
   button {
-    position: absolute;
+    position: fixed;
     bottom: 32px;
     right: 32px;
     border-radius: 100%;
-    aspect-ratio: 1;
+    width: 128px;
+    height: 128px;
+    background-color: red;
+    border: 0.0px solid white;
+    transition: border 0.1s;
+  }
+
+  button:hover {
+    border: 4.0px solid white;
   }
 </style>

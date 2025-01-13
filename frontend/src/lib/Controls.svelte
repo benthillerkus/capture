@@ -7,10 +7,12 @@
   let anaglyph_format = $state("red-cyan");
   let resolution_idx = $state("4");
   let codec = $state("MotionJpeg");
+  let dragging = $state(false);
+
+  $inspect(dragging);
 
   $effect(() => {
     let _ = resolution_idx;
-    console.log(resolution_idx);
     let resolution = (() => {
       switch (resolution_idx) {
         case "0":
@@ -43,8 +45,10 @@
         return response.json();
       })
       .then((body) => {
-        x = body.convergence[0];
-        y = body.convergence[1];
+        if (!dragging) {
+          x = body.convergence[0];
+          y = body.convergence[1];
+        }
         multiview_mode = body.multiview_mode;
         anaglyph_format = body.anaglyph_format;
         switch (body.height) {
@@ -69,14 +73,35 @@
   });
 </script>
 
-<div>
-  <label>
-    X
-    <input bind:value={x} type="number" />
-  </label>
-  <label>
-    Y
-    <input bind:value={y} type="number" />
+<div id="container">
+  <label id="convergence">
+    Convergence
+    <label>
+      X
+      <input
+        min="-1.0"
+        max="1.0"
+        step="0.01"
+        bind:value={x}
+        oninput={() => (dragging = true)}
+        ondragend={() => setTimeout(() => (dragging = false), 3000)}
+        type="range"
+      />
+      <input bind:value={x} step="0.01" type="number" />
+    </label>
+    <label>
+      Y
+      <input
+        min="-1.0"
+        max="1.0"
+        step="0.01"
+        bind:value={y}
+        oninput={() => (dragging = true)}
+        ondragend={() => setTimeout(() => (dragging = false), 3000)}
+        type="range"
+      />
+      <input bind:value={y} type="number" step="0.01" />
+    </label>
   </label>
   <label>
     Multiview Mode
@@ -92,16 +117,16 @@
       <option value="row-interleaved">Row Interleaved</option>
       <option value="frame-by-frame">Frame-by-Frame</option>
     </select>
+    {#if multiview_mode === "mono"}
+      <label>
+        <select bind:value={anaglyph_format}>
+          <option value="red-cyan">Red-Cyan</option>
+          <option value="green-magenta">Green-Magenta</option>
+          <option value="amber-blue">Amber-Blue</option>
+        </select>
+      </label>
+    {/if}
   </label>
-  {#if multiview_mode === "mono"}
-    <label>
-      <select bind:value={anaglyph_format}>
-        <option value="red-cyan">Red-Cyan</option>
-        <option value="green-magenta">Green-Magenta</option>
-        <option value="amber-blue">Amber-Blue</option>
-      </select>
-    </label>
-  {/if}
   <label>
     Resolution
     <select bind:value={resolution_idx}>
@@ -120,3 +145,25 @@
     </select>
   </label>
 </div>
+
+<style>
+  #container {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    background-color: grey;
+    box-sizing: border-box;
+    padding: 64px;
+    border-radius: 0px 0px 32px 32px;
+  }
+
+  #container > label {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #convergence input[type="number"] {
+    width: 48px;
+  }
+</style>

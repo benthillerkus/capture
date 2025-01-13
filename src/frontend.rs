@@ -1,21 +1,15 @@
 use std::net::SocketAddr;
 
 use axum::{
-    extract::{self, Path},
-    http::{header, Method, StatusCode, Uri},
-    response::{Html, IntoResponse},
+    extract::{self},
     routing::{get, post},
     Json, Router,
 };
-use serde::Deserialize;
-use tokio::{fs::File, sync::mpsc};
-use tower_http::{
-    cors::{Any, CorsLayer},
-    services::{ServeDir, ServeFile},
-};
-use tracing::{info, warn};
+use tokio::sync::mpsc;
+use tower_http::{cors::CorsLayer, services::ServeDir};
+use tracing::warn;
 
-use crate::camera::{self, CameraActorHandle, NullableConfiguration};
+use crate::camera::{CameraActorHandle, NullableConfiguration};
 
 struct WebServerActor {
     address: SocketAddr,
@@ -44,7 +38,7 @@ impl WebServerActor {
         let camera4 = actor.camera.clone();
 
         let app = Router::new()
-            .route_service("/gallery", ServeDir::new("capture"))
+            .route_service("/gallery", ServeDir::new("gallery"))
             .route(
                 "/api/gallery",
                 get(|| async {
@@ -59,7 +53,13 @@ impl WebServerActor {
                     let mut result = vec![];
 
                     while let Ok(Some(entry)) = dir.next_entry().await {
-                        result.push(entry.file_name().to_string_lossy().to_string());
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name.ends_with(".mkv")
+                            || name.ends_with(".mov")
+                            || name.ends_with(".mp4")
+                        {
+                            result.push(name);
+                        }
                     }
 
                     Json(result)

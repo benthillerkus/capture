@@ -1,14 +1,10 @@
-use std::time::Duration;
 
 use frontend::WebServerActorHandle;
-use rand::{prelude::*, rngs};
 
-use camera::{CameraActorHandle, CameraState};
+use camera::CameraActorHandle;
 use clap::Parser;
 
-use axum::{response::Html, routing::get, Router};
 use color_eyre::eyre::Result;
-use tower_http::services::ServeFile;
 use tracing::{info, warn};
 
 mod camera;

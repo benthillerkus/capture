@@ -59,21 +59,37 @@
   });
 </script>
 
-<!-- svelte-ignore a11y_media_has_caption -->
-{#if session}
-  {#if !interacted}
-    <p>Click to start stream!</p>
+<div>
+  <!-- svelte-ignore a11y_media_has_caption -->
+  {#if session}
+    {#if !interacted}
+      <p>Click to start stream!</p>
+    {/if}
+    <video controls bind:this={video} onplay={(_) => (interacted = true)}>
+    </video>
+  {:else}
+    <p>Connecting to Camera...</p>
   {/if}
-  <video controls bind:this={video} onplay={(_) => (interacted = true)}>
-  </video>
-{:else}
-  <p>Connecting to Camera...</p>
-{/if}
+</div>
 
 <style>
+  div {
+    display: grid;
+    grid-template: 1fr / 1fr;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+
+  div > * {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
   video {
     width: 100%;
     max-width: 100%;
     height: auto;
+    border-radius: 32px 32px 0px 0px;
   }
 </style>
