@@ -21,7 +21,10 @@
 <div class="gallery">
   {#each content as item}
     <!-- svelte-ignore a11y_media_has_caption -->
-    <video src={`/gallery/${item}`} controls></video>
+    <div>
+      <video src={`/gallery/${item}`} controls> </video>
+      <a href={`/gallery/${item}`}>{item} (download)</a>
+    </div>
   {/each}
 </div>
 
@@ -29,11 +32,12 @@
   .gallery {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
+    gap: 32px 16px;
   }
 
   video {
     width: 100%;
     height: auto;
+    border-radius: 32px;
   }
 </style>

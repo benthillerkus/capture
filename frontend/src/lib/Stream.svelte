@@ -63,7 +63,7 @@
   <!-- svelte-ignore a11y_media_has_caption -->
   {#if session}
     {#if !interacted}
-      <p>Click to start stream!</p>
+      <p>Connected.<br>Click to watch camera feed</p>
     {/if}
     <video controls bind:this={video} onplay={(_) => (interacted = true)}>
     </video>

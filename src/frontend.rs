@@ -38,7 +38,7 @@ impl WebServerActor {
         let camera4 = actor.camera.clone();
 
         let app = Router::new()
-            .route_service("/gallery", ServeDir::new("gallery"))
+            .nest_service("/gallery", ServeDir::new("gallery"))
             .route(
                 "/api/gallery",
                 get(|| async {

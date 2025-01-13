@@ -25,6 +25,8 @@
   </div>
 
   <Record></Record>
+
+  <a href="https://github.com/benthillerkus/capture">code</a>
 </main>
 
 <style>
@@ -34,5 +36,12 @@
     justify-content: flex-start;
     height: 100%;
     width: 100%;
+  }
+
+  a {
+    margin-top: 32px;
+    text-align: center;
+    color: grey;
+    margin: 4px;
   }
 </style>
